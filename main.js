@@ -6,7 +6,8 @@ class LifeBalancer {
     constructor() {
         this.state = {
             user: JSON.parse(localStorage.getItem('lb_user')) || null,
-            currentView: 'calendar', // 'calendar', 'setup', 'record'
+            // 초기 뷰를 setup으로 설정 (로그인 직후 분야 설정으로 이동)
+            currentView: JSON.parse(localStorage.getItem('lb_user')) ? 'setup' : 'auth', 
             selectedDate: new Date().toISOString().split('T')[0],
             records: JSON.parse(localStorage.getItem('lb_records')) || {},
             categories: JSON.parse(localStorage.getItem('lb_categories')) || [
@@ -41,12 +42,12 @@ class LifeBalancer {
         if (!this.state.user) {
             app.innerHTML = this.renderAuth();
             this.bindAuthEvents();
-        } else if (this.state.currentView === 'calendar') {
-            app.innerHTML = this.renderFullCalendar();
-            this.bindCalendarEvents();
         } else if (this.state.currentView === 'setup') {
             app.innerHTML = this.renderSetupView();
             this.bindSetupEvents();
+        } else if (this.state.currentView === 'calendar') {
+            app.innerHTML = this.renderFullCalendar();
+            this.bindCalendarEvents();
         } else {
             app.innerHTML = this.renderDashboard();
             this.bindDashboardEvents();
@@ -54,6 +55,7 @@ class LifeBalancer {
         }
     }
 
+    // --- Auth Component ---
     renderAuth() {
         return `
             <div class="auth-container fade-in">
@@ -72,11 +74,95 @@ class LifeBalancer {
         document.getElementById('loginBtn')?.addEventListener('click', () => {
             const username = document.getElementById('username').value;
             if (username) {
-                this.setState({ user: { name: username }, currentView: 'calendar' });
+                this.setState({ user: { name: username }, currentView: 'setup' });
             }
         });
     }
 
+    // --- Setup View (Weights Management) - Now comes BEFORE Calendar ---
+    renderSetupView() {
+        const total = this.getTotalWeight();
+        const isValid = total === 100;
+
+        return `
+            <div class="setup-container fade-in">
+                <header style="margin-bottom: 30px;">
+                    <h2 style="font-size: 2rem; margin-bottom: 10px;">인생 가중치 설계</h2>
+                    <p style="color: var(--text-secondary); font-size: 1.1rem;">당신의 삶에서 중요한 분야를 정의하세요 (최대 10개)</p>
+                </header>
+
+                <div class="setup-grid">
+                    ${this.state.categories.map(cat => `
+                        <div class="setup-item-card">
+                            <button class="remove-item-btn" data-id="${cat.id}">✕</button>
+                            <input type="text" class="setup-item-name" data-id="${cat.id}" value="${cat.name}" placeholder="분야 이름">
+                            <div class="setup-item-weight-wrapper">
+                                <input type="number" class="setup-weight-input" data-id="${cat.id}" value="${cat.weight}" min="0" max="100">
+                                <span style="font-size: 1rem;">%</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                    
+                    ${this.state.categories.length < 10 ? `
+                        <div class="add-btn-card" id="addCategoryBtn">+</div>
+                    ` : ''}
+                </div>
+
+                <div class="weight-status-bar">
+                    <div>
+                        <div style="font-size: 0.9rem; color: var(--text-secondary);">총 가중치 합계</div>
+                        <div style="font-size: 1.8rem; font-weight: 800; color: ${isValid ? 'var(--success-color)' : 'var(--error-color)'}">
+                            ${total} / 100
+                        </div>
+                    </div>
+                    <button id="completeSetupBtn" class="complete-btn ${isValid ? 'active' : ''}">설계 완료 및 달력보기</button>
+                </div>
+                <button id="logoutBtn" style="background: none; color: var(--text-secondary); margin-top: 20px; align-self: flex-end;">로그아웃</button>
+            </div>
+        `;
+    }
+
+    bindSetupEvents() {
+        document.getElementById('logoutBtn')?.addEventListener('click', () => {
+            this.setState({ user: null });
+        });
+
+        document.getElementById('addCategoryBtn')?.addEventListener('click', () => {
+            if (this.state.categories.length >= 10) return;
+            const newCat = { id: Date.now(), name: '새 분야', weight: 0 };
+            this.setState({ categories: [...this.state.categories, newCat] });
+        });
+
+        document.querySelectorAll('.remove-item-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = parseInt(e.target.dataset.id);
+                this.setState({ categories: this.state.categories.filter(c => c.id !== id) });
+            });
+        });
+
+        document.querySelectorAll('.setup-item-name').forEach(input => {
+            input.addEventListener('change', (e) => {
+                const id = parseInt(e.target.dataset.id);
+                const categories = this.state.categories.map(c => c.id === id ? { ...c, name: e.target.value } : c);
+                this.setState({ categories });
+            });
+        });
+
+        document.querySelectorAll('.setup-weight-input').forEach(input => {
+            input.addEventListener('change', (e) => {
+                const id = parseInt(e.target.dataset.id);
+                const val = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
+                const categories = this.state.categories.map(c => c.id === id ? { ...c, weight: val } : c);
+                this.setState({ categories });
+            });
+        });
+
+        document.getElementById('completeSetupBtn')?.addEventListener('click', () => {
+            this.setState({ currentView: 'calendar' });
+        });
+    }
+
+    // --- Full Calendar View ---
     renderFullCalendar() {
         const now = new Date();
         const year = now.getFullYear();
@@ -98,10 +184,13 @@ class LifeBalancer {
             <div class="calendar-container fade-in">
                 <header class="calendar-header">
                     <div>
-                        <h2 style="font-size: 1.8rem;">${month + 1}월</h2>
-                        <p style="color: var(--text-secondary); font-size: 1rem;">반갑습니다, ${this.state.user.name}님</p>
+                        <h2 style="font-size: 1.8rem;">${month + 1}월 달력</h2>
+                        <p style="color: var(--text-secondary); font-size: 1rem;">원하는 날짜를 선택하여 기록하세요</p>
                     </div>
-                    <button id="logoutBtn" style="background: none; color: var(--text-secondary); font-size: 0.9rem;">로그아웃</button>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="editSetupBtn" style="background: #222; color: white; padding: 8px 15px; border-radius: 8px;">분야 수정</button>
+                        <button id="logoutBtn" style="background: none; color: var(--text-secondary);">로그아웃</button>
+                    </div>
                 </header>
                 <div class="calendar-month-grid">
                     ${daySquares.join('')}
@@ -114,118 +203,45 @@ class LifeBalancer {
         document.getElementById('logoutBtn')?.addEventListener('click', () => {
             this.setState({ user: null });
         });
+        document.getElementById('editSetupBtn')?.addEventListener('click', () => {
+            this.setState({ currentView: 'setup' });
+        });
         document.querySelectorAll('.calendar-day-square').forEach(el => {
             el.addEventListener('click', (e) => {
                 const date = e.currentTarget.dataset.date;
-                this.setState({ selectedDate: date, currentView: 'setup' });
+                this.setState({ selectedDate: date, currentView: 'record' });
             });
         });
     }
 
-    renderSetupView() {
-        const total = this.getTotalWeight();
-        const isValid = total === 100;
-
-        return `
-            <div class="setup-container fade-in">
-                <button id="backToCalendar" class="back-btn" style="width: fit-content;">← 달력으로</button>
-                <header>
-                    <h2 style="font-size: 1.5rem;">삶의 균형 설계</h2>
-                    <p style="color: var(--text-secondary); font-size: 0.9rem;">${this.state.selectedDate}의 분야별 중요도를 설정하세요 (최대 10개)</p>
-                </header>
-
-                <div class="setup-grid">
-                    ${this.state.categories.map(cat => `
-                        <div class="setup-item-card">
-                            <button class="remove-item-btn" data-id="${cat.id}">✕</button>
-                            <input type="text" class="setup-item-name" data-id="${cat.id}" value="${cat.name}">
-                            <div class="setup-item-weight-wrapper">
-                                <input type="number" class="setup-weight-input" data-id="${cat.id}" value="${cat.weight}">
-                                <span>%</span>
-                            </div>
-                        </div>
-                    `).join('')}
-                    
-                    ${this.state.categories.length < 10 ? `
-                        <div class="add-btn-card" id="addCategoryBtn">+</div>
-                    ` : ''}
-                </div>
-
-                <div class="weight-status-bar">
-                    <div>
-                        <div style="font-size: 0.8rem; color: var(--text-secondary);">현재 가중치 합계</div>
-                        <div style="font-size: 1.5rem; font-weight: 800; color: ${isValid ? 'var(--success-color)' : 'var(--error-color)'}">
-                            ${total} / 100
-                        </div>
-                    </div>
-                    <button id="completeSetupBtn" class="complete-btn ${isValid ? 'active' : ''}">설정 완료</button>
-                </div>
-            </div>
-        `;
-    }
-
-    bindSetupEvents() {
-        document.getElementById('backToCalendar')?.addEventListener('click', () => {
-            this.setState({ currentView: 'calendar' });
-        });
-        document.getElementById('addCategoryBtn')?.addEventListener('click', () => {
-            if (this.state.categories.length >= 10) return;
-            const newCat = { id: Date.now(), name: '새 분야', weight: 0 };
-            this.setState({ categories: [...this.state.categories, newCat] });
-        });
-        document.querySelectorAll('.remove-item-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const id = parseInt(e.target.dataset.id);
-                this.setState({ categories: this.state.categories.filter(c => c.id !== id) });
-            });
-        });
-        document.querySelectorAll('.setup-item-name').forEach(input => {
-            input.addEventListener('change', (e) => {
-                const id = parseInt(e.target.dataset.id);
-                const categories = this.state.categories.map(c => c.id === id ? { ...c, name: e.target.value } : c);
-                this.setState({ categories });
-            });
-        });
-        document.querySelectorAll('.setup-weight-input').forEach(input => {
-            input.addEventListener('change', (e) => {
-                const id = parseInt(e.target.dataset.id);
-                const val = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
-                const categories = this.state.categories.map(c => c.id === id ? { ...c, weight: val } : c);
-                this.setState({ categories });
-            });
-        });
-        document.getElementById('completeSetupBtn')?.addEventListener('click', () => {
-            this.setState({ currentView: 'record' });
-        });
-    }
-
+    // --- Record View ---
     renderDashboard() {
         const todayRecord = this.state.records[this.state.selectedDate] || {};
         return `
             <div class="fade-in">
-                <button id="backToSetup" class="back-btn">← 분야 수정</button>
+                <button id="backToCalendar" class="back-btn">← 달력으로 돌아가기</button>
                 <header class="dashboard-header" style="margin-bottom: 20px;">
-                    <h2 style="font-size: 1.5rem;">오늘의 성과 기록</h2>
-                    <p style="color: var(--text-secondary);">${this.state.selectedDate}</p>
+                    <h2 style="font-size: 1.5rem;">${this.state.selectedDate} 성과 기록</h2>
                 </header>
                 <section class="glass-card" style="margin-bottom: 30px;">
                     <div class="setup-grid">
                         ${this.state.categories.map(cat => `
-                            <div class="setup-item-card" style="aspect-ratio: auto; height: 120px; cursor: pointer;" class="achieve-card" data-id="${cat.id}">
-                                <div style="font-weight: 700;">${cat.name}</div>
+                            <div class="setup-item-card" style="aspect-ratio: auto; min-height: 120px; cursor: pointer;" data-id="${cat.id}">
+                                <div style="font-weight: 700; font-size: 1.1rem;">${cat.name}</div>
                                 <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 10px;">가중치: ${cat.weight}%</div>
-                                <div style="font-size: 1.2rem; font-weight: 800; color: var(--accent-color);">${todayRecord[cat.id] || 0}%</div>
+                                <div style="font-size: 1.5rem; font-weight: 800; color: var(--accent-color);">${todayRecord[cat.id] || 0}%</div>
+                                <div style="font-size: 0.7rem; color: #555; margin-top: 5px;">클릭하여 성취도 입력</div>
                             </div>
                         `).join('')}
                     </div>
-                    <button id="saveRecordBtn" class="auth-btn" style="width: 100%; padding: 16px; background: var(--accent-color); color: #000; font-weight: 700; margin-top: 25px;">성과 데이터 반영</button>
+                    <button id="saveRecordBtn" class="auth-btn" style="width: 100%; padding: 16px; background: var(--accent-color); color: #000; font-weight: 700; margin-top: 25px;">성과 차트 업데이트</button>
                 </section>
                 <section class="analysis-section glass-card">
-                    <h3>내 인생의 균형</h3>
+                    <h3>인생 밸런스 리포트</h3>
                     <canvas id="balanceChart"></canvas>
                     <div id="deficiencyList"></div>
                     <button id="aiAnalyzeBtn" class="auth-btn" style="width: 100%; padding: 16px; background: #1e293b; color: #fff; font-weight: 700; margin-top: 20px;">AI 원인 분석</button>
-                    ${this.state.aiAnalysis ? `<div class="ai-reason-card fade-in"><strong>분석 리포트:</strong><br>${this.state.aiAnalysis}</div>` : ''}
+                    ${this.state.aiAnalysis ? `<div class="ai-reason-card fade-in"><strong>분석 결과:</strong><br>${this.state.aiAnalysis}</div>` : ''}
                 </section>
             </div>
         `;
@@ -236,8 +252,8 @@ class LifeBalancer {
     }
 
     bindDashboardEvents() {
-        document.getElementById('backToSetup')?.addEventListener('click', () => {
-            this.setState({ currentView: 'setup' });
+        document.getElementById('backToCalendar')?.addEventListener('click', () => {
+            this.setState({ currentView: 'calendar', aiAnalysis: null });
         });
         document.querySelectorAll('.setup-item-card').forEach(card => {
             card.addEventListener('click', (e) => {
@@ -277,12 +293,13 @@ class LifeBalancer {
             data: {
                 labels: labels,
                 datasets: [{
-                    label: '밸런스 스코어',
+                    label: '성과 달성도',
                     data: data,
                     backgroundColor: 'rgba(0, 242, 255, 0.2)',
                     borderColor: '#00f2ff',
-                    borderWidth: 2,
-                    pointBackgroundColor: '#00f2ff'
+                    borderWidth: 3,
+                    pointBackgroundColor: '#00f2ff',
+                    pointRadius: 4
                 }]
             },
             options: {
@@ -292,7 +309,7 @@ class LifeBalancer {
                         max: 100,
                         grid: { color: 'rgba(255, 255, 255, 0.1)' },
                         angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
-                        pointLabels: { color: '#fff', font: { size: 14 } }
+                        pointLabels: { color: '#fff', font: { size: 14, weight: 'bold' } }
                     }
                 },
                 plugins: { legend: { display: false } }
@@ -313,10 +330,10 @@ class LifeBalancer {
             const score = investment / (weightFactor || 1);
             return score < 50;
         });
-        let message = "현재 삶이 매우 조화롭게 균형을 이루고 있습니다. 완벽한 밸런스입니다!";
+        let message = "현재 삶이 매우 조화롭게 균형을 이루고 있습니다. 이 흐름을 유지하세요!";
         if (deficiencies.length > 0) {
             const topDef = deficiencies.sort((a,b) => b.weight - a.weight)[0];
-            message = `중요도가 높은 '${topDef.name}' 분야의 성취가 낮습니다. 에너지를 재분배하여 밸런스를 맞춰보세요.`;
+            message = `현재 '${topDef.name}' 분야에 대한 에너지가 많이 소진된 상태입니다. 이 분야의 중요도가 ${topDef.weight}%인 점을 고려할 때, 우선순위를 재조정할 필요가 있습니다.`;
         }
         this.setState({ aiAnalysis: message });
     }
