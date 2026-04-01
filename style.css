@@ -1,1 +1,136 @@
-/* Add styles here */
+:root {
+    --bg-color: #050505;
+    --card-bg: #111111;
+    --text-primary: #ffffff;
+    --text-secondary: #a0a0a0;
+    --accent-color: #00f2ff;
+    --error-color: #ff4d4d;
+    --success-color: #4dff88;
+    --shadow-deep: 0 10px 30px rgba(0, 0, 0, 0.7);
+    --glow-effect: 0 0 15px rgba(0, 242, 255, 0.4);
+    --font-main: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    font-family: var(--font-main);
+    overflow-x: hidden;
+    min-height: 100vh;
+}
+
+#app {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+button {
+    cursor: pointer;
+    border: none;
+    border-radius: 12px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-family: inherit;
+}
+
+button:active {
+    transform: scale(0.95);
+}
+
+.glass-card {
+    background: var(--card-bg);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 24px;
+    padding: 24px;
+    box-shadow: var(--shadow-deep);
+}
+
+/* Auth Component Styles */
+.auth-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    gap: 20px;
+}
+
+.auth-logo {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: linear-gradient(to bottom right, #fff, #888);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 10px;
+}
+
+.auth-input {
+    width: 100%;
+    padding: 16px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 12px;
+    color: white;
+    font-size: 1rem;
+}
+
+.auth-btn:hover {
+    box-shadow: 0 0 25px rgba(0, 242, 255, 0.6);
+    transform: translateY(-2px);
+}
+
+.category-item {
+    background: #1a1a1a;
+    padding: 15px;
+    border-radius: 16px;
+    border: 1px solid #333;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.category-item:focus-within {
+    border-color: var(--accent-color);
+    box-shadow: var(--glow-effect);
+}
+
+input[type="range"] {
+    accent-color: var(--accent-color);
+}
+
+.view-toggle {
+    padding: 8px 16px;
+    background: #222;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    border-radius: 8px;
+}
+
+.view-toggle.active {
+    background: var(--accent-color);
+    color: #000;
+    font-weight: 600;
+}
+
+.ai-reason-card {
+    border-left: 4px solid var(--accent-color);
+    padding: 20px;
+    background: linear-gradient(90deg, #0f1c24 0%, #050505 100%);
+    border-radius: 0 16px 16px 0;
+    line-height: 1.6;
+    margin-top: 20px;
+    box-shadow: inset 10px 0 20px rgba(0, 242, 255, 0.05);
+}
+
+.deficiency-alert {
+    color: var(--error-color);
+    font-weight: bold;
+    margin-top: 10px;
+}
