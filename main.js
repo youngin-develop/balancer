@@ -6,10 +6,10 @@ class LifeBalancer {
     constructor() {
         this.state = {
             user: JSON.parse(localStorage.getItem('lb_user')) || null,
-            // 초기 뷰를 setup으로 설정 (로그인 직후 분야 설정으로 이동)
             currentView: JSON.parse(localStorage.getItem('lb_user')) ? 'setup' : 'auth', 
             selectedDate: new Date().toISOString().split('T')[0],
             records: JSON.parse(localStorage.getItem('lb_records')) || {},
+            dailyGoals: JSON.parse(localStorage.getItem('lb_dailyGoals')) || {}, // 날짜별 목표 텍스트
             categories: JSON.parse(localStorage.getItem('lb_categories')) || [
                 { id: 1, name: '본업', weight: 70 },
                 { id: 2, name: '운동', weight: 20 },
@@ -29,6 +29,7 @@ class LifeBalancer {
         localStorage.setItem('lb_user', JSON.stringify(this.state.user));
         localStorage.setItem('lb_records', JSON.stringify(this.state.records));
         localStorage.setItem('lb_categories', JSON.stringify(this.state.categories));
+        localStorage.setItem('lb_dailyGoals', JSON.stringify(this.state.dailyGoals));
     }
 
     setState(newState) {
@@ -48,6 +49,9 @@ class LifeBalancer {
         } else if (this.state.currentView === 'calendar') {
             app.innerHTML = this.renderFullCalendar();
             this.bindCalendarEvents();
+        } else if (this.state.currentView === 'dailyGoal') {
+            app.innerHTML = this.renderDailyGoalView();
+            this.bindDailyGoalEvents();
         } else {
             app.innerHTML = this.renderDashboard();
             this.bindDashboardEvents();
@@ -79,35 +83,29 @@ class LifeBalancer {
         });
     }
 
-    // --- Setup View (Weights Management) - Now comes BEFORE Calendar ---
+    // --- Global Category Setup ---
     renderSetupView() {
         const total = this.getTotalWeight();
         const isValid = total === 100;
-
         return `
             <div class="setup-container fade-in">
                 <header style="margin-bottom: 30px;">
                     <h2 style="font-size: 2rem; margin-bottom: 10px;">인생 가중치 설계</h2>
-                    <p style="color: var(--text-secondary); font-size: 1.1rem;">당신의 삶에서 중요한 분야를 정의하세요 (최대 10개)</p>
+                    <p style="color: var(--text-secondary); font-size: 1.1rem;">나의 삶의 영역과 중요도를 먼저 정의하세요</p>
                 </header>
-
                 <div class="setup-grid">
                     ${this.state.categories.map(cat => `
                         <div class="setup-item-card">
                             <button class="remove-item-btn" data-id="${cat.id}">✕</button>
-                            <input type="text" class="setup-item-name" data-id="${cat.id}" value="${cat.name}" placeholder="분야 이름">
+                            <input type="text" class="setup-item-name" data-id="${cat.id}" value="${cat.name}">
                             <div class="setup-item-weight-wrapper">
-                                <input type="number" class="setup-weight-input" data-id="${cat.id}" value="${cat.weight}" min="0" max="100">
-                                <span style="font-size: 1rem;">%</span>
+                                <input type="number" class="setup-weight-input" data-id="${cat.id}" value="${cat.weight}">
+                                <span>%</span>
                             </div>
                         </div>
                     `).join('')}
-                    
-                    ${this.state.categories.length < 10 ? `
-                        <div class="add-btn-card" id="addCategoryBtn">+</div>
-                    ` : ''}
+                    ${this.state.categories.length < 10 ? `<div class="add-btn-card" id="addCategoryBtn">+</div>` : ''}
                 </div>
-
                 <div class="weight-status-bar">
                     <div>
                         <div style="font-size: 0.9rem; color: var(--text-secondary);">총 가중치 합계</div>
@@ -117,29 +115,22 @@ class LifeBalancer {
                     </div>
                     <button id="completeSetupBtn" class="complete-btn ${isValid ? 'active' : ''}">설계 완료 및 달력보기</button>
                 </div>
-                <button id="logoutBtn" style="background: none; color: var(--text-secondary); margin-top: 20px; align-self: flex-end;">로그아웃</button>
             </div>
         `;
     }
 
     bindSetupEvents() {
-        document.getElementById('logoutBtn')?.addEventListener('click', () => {
-            this.setState({ user: null });
-        });
-
         document.getElementById('addCategoryBtn')?.addEventListener('click', () => {
             if (this.state.categories.length >= 10) return;
             const newCat = { id: Date.now(), name: '새 분야', weight: 0 };
             this.setState({ categories: [...this.state.categories, newCat] });
         });
-
         document.querySelectorAll('.remove-item-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const id = parseInt(e.target.dataset.id);
                 this.setState({ categories: this.state.categories.filter(c => c.id !== id) });
             });
         });
-
         document.querySelectorAll('.setup-item-name').forEach(input => {
             input.addEventListener('change', (e) => {
                 const id = parseInt(e.target.dataset.id);
@@ -147,7 +138,6 @@ class LifeBalancer {
                 this.setState({ categories });
             });
         });
-
         document.querySelectorAll('.setup-weight-input').forEach(input => {
             input.addEventListener('change', (e) => {
                 const id = parseInt(e.target.dataset.id);
@@ -156,7 +146,6 @@ class LifeBalancer {
                 this.setState({ categories });
             });
         });
-
         document.getElementById('completeSetupBtn')?.addEventListener('click', () => {
             this.setState({ currentView: 'calendar' });
         });
@@ -185,7 +174,7 @@ class LifeBalancer {
                 <header class="calendar-header">
                     <div>
                         <h2 style="font-size: 1.8rem;">${month + 1}월 달력</h2>
-                        <p style="color: var(--text-secondary); font-size: 1rem;">원하는 날짜를 선택하여 기록하세요</p>
+                        <p style="color: var(--text-secondary);">날짜를 선택해 오늘 할 일을 정해보세요</p>
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button id="editSetupBtn" style="background: #222; color: white; padding: 8px 15px; border-radius: 8px;">분야 수정</button>
@@ -209,32 +198,80 @@ class LifeBalancer {
         document.querySelectorAll('.calendar-day-square').forEach(el => {
             el.addEventListener('click', (e) => {
                 const date = e.currentTarget.dataset.date;
-                this.setState({ selectedDate: date, currentView: 'record' });
+                this.setState({ selectedDate: date, currentView: 'dailyGoal' });
             });
         });
     }
 
-    // --- Record View ---
-    renderDashboard() {
-        const todayRecord = this.state.records[this.state.selectedDate] || {};
+    // --- Daily Goal Setting View (AFTER Calendar) ---
+    renderDailyGoalView() {
+        const goals = this.state.dailyGoals[this.state.selectedDate] || {};
         return `
             <div class="fade-in">
-                <button id="backToCalendar" class="back-btn">← 달력으로 돌아가기</button>
+                <button id="backToCalendar" class="back-btn">← 달력으로</button>
+                <header style="margin-bottom: 30px;">
+                    <h2 style="font-size: 1.8rem; margin-bottom: 5px;">오늘의 목표 작성</h2>
+                    <p style="color: var(--text-secondary);">${this.state.selectedDate}</p>
+                </header>
+                <div class="setup-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    ${this.state.categories.map(cat => `
+                        <div class="setup-item-card" style="aspect-ratio: 1/1; flex-direction: column; justify-content: flex-start; padding: 15px;">
+                            <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 10px; font-size: 1.1rem;">${cat.name}</div>
+                            <textarea class="goal-textarea" data-id="${cat.id}" placeholder="오늘 이 분야에서 무엇을 하실 건가요?" 
+                                style="width: 100%; height: 100%; background: none; border: none; color: white; resize: none; font-size: 0.9rem; line-height: 1.4;">${goals[cat.id] || ''}</textarea>
+                        </div>
+                    `).join('')}
+                </div>
+                <button id="finishGoalBtn" class="auth-btn" style="width: 100%; padding: 16px; background: var(--accent-color); color: #000; font-weight: 700; margin-top: 30px;">작성 완료 및 기록하기</button>
+            </div>
+        `;
+    }
+
+    bindDailyGoalEvents() {
+        document.getElementById('backToCalendar')?.addEventListener('click', () => {
+            this.setState({ currentView: 'calendar' });
+        });
+        document.getElementById('finishGoalBtn')?.addEventListener('click', () => {
+            const goals = { ...this.state.dailyGoals[this.state.selectedDate] };
+            document.querySelectorAll('.goal-textarea').forEach(area => {
+                goals[area.dataset.id] = area.value;
+            });
+            const dailyGoals = { ...this.state.dailyGoals, [this.state.selectedDate]: goals };
+            this.setState({ dailyGoals, currentView: 'record' });
+        });
+    }
+
+    // --- Record & Achievement View ---
+    renderDashboard() {
+        const todayRecord = this.state.records[this.state.selectedDate] || {};
+        const goals = this.state.dailyGoals[this.state.selectedDate] || {};
+        
+        return `
+            <div class="fade-in">
+                <button id="backToGoal" class="back-btn">← 목표 수정</button>
                 <header class="dashboard-header" style="margin-bottom: 20px;">
-                    <h2 style="font-size: 1.5rem;">${this.state.selectedDate} 성과 기록</h2>
+                    <h2 style="font-size: 1.5rem;">달성률 체크</h2>
+                    <p style="color: var(--text-secondary);">${this.state.selectedDate}</p>
                 </header>
                 <section class="glass-card" style="margin-bottom: 30px;">
                     <div class="setup-grid">
                         ${this.state.categories.map(cat => `
-                            <div class="setup-item-card" style="aspect-ratio: auto; min-height: 120px; cursor: pointer;" data-id="${cat.id}">
-                                <div style="font-weight: 700; font-size: 1.1rem;">${cat.name}</div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 10px;">가중치: ${cat.weight}%</div>
-                                <div style="font-size: 1.5rem; font-weight: 800; color: var(--accent-color);">${todayRecord[cat.id] || 0}%</div>
-                                <div style="font-size: 0.7rem; color: #555; margin-top: 5px;">클릭하여 성취도 입력</div>
+                            <div class="setup-item-card" style="aspect-ratio: auto; min-height: 140px; cursor: pointer; display: flex; flex-direction: column; align-items: flex-start; padding: 20px;" data-id="${cat.id}">
+                                <div style="display: flex; justify-content: space-between; width: 100%; margin-bottom: 8px;">
+                                    <span style="font-weight: 700; color: var(--accent-color);">${cat.name}</span>
+                                    <span style="font-size: 0.8rem; color: #666;">가중치 ${cat.weight}%</span>
+                                </div>
+                                <div style="font-size: 0.9rem; color: #ccc; margin-bottom: 15px; min-height: 1.2rem;">
+                                    ${goals[cat.id] ? `🎯 ${goals[cat.id]}` : '<span style="color: #444;">설정된 목표 없음</span>'}
+                                </div>
+                                <div style="display: flex; align-items: baseline; gap: 10px;">
+                                    <span style="font-size: 1.5rem; font-weight: 800; color: white;">${todayRecord[cat.id] || 0}%</span>
+                                    <span style="font-size: 0.8rem; color: #555;">클릭하여 성과 입력</span>
+                                </div>
                             </div>
                         `).join('')}
                     </div>
-                    <button id="saveRecordBtn" class="auth-btn" style="width: 100%; padding: 16px; background: var(--accent-color); color: #000; font-weight: 700; margin-top: 25px;">성과 차트 업데이트</button>
+                    <button id="saveRecordBtn" class="auth-btn" style="width: 100%; padding: 16px; background: var(--accent-color); color: #000; font-weight: 700; margin-top: 25px;">성과 차트 반영</button>
                 </section>
                 <section class="analysis-section glass-card">
                     <h3>인생 밸런스 리포트</h3>
@@ -252,14 +289,14 @@ class LifeBalancer {
     }
 
     bindDashboardEvents() {
-        document.getElementById('backToCalendar')?.addEventListener('click', () => {
-            this.setState({ currentView: 'calendar', aiAnalysis: null });
+        document.getElementById('backToGoal')?.addEventListener('click', () => {
+            this.setState({ currentView: 'dailyGoal', aiAnalysis: null });
         });
         document.querySelectorAll('.setup-item-card').forEach(card => {
             card.addEventListener('click', (e) => {
                 const id = e.currentTarget.dataset.id;
                 const cat = this.state.categories.find(c => c.id == id);
-                const val = prompt(`'${cat.name}'의 오늘의 달성률을 입력하세요 (0-100):`, this.state.records[this.state.selectedDate]?.[id] || 0);
+                const val = prompt(`'${cat.name}'의 오늘의 성취도를 입력하세요 (0-100):`, this.state.records[this.state.selectedDate]?.[id] || 0);
                 if (val !== null) {
                     const achievement = Math.max(0, Math.min(100, parseInt(val) || 0));
                     const currentRecord = this.state.records[this.state.selectedDate] || {};
@@ -330,10 +367,10 @@ class LifeBalancer {
             const score = investment / (weightFactor || 1);
             return score < 50;
         });
-        let message = "현재 삶이 매우 조화롭게 균형을 이루고 있습니다. 이 흐름을 유지하세요!";
+        let message = "현재 삶이 매우 조화롭게 균형을 이루고 있습니다!";
         if (deficiencies.length > 0) {
             const topDef = deficiencies.sort((a,b) => b.weight - a.weight)[0];
-            message = `현재 '${topDef.name}' 분야에 대한 에너지가 많이 소진된 상태입니다. 이 분야의 중요도가 ${topDef.weight}%인 점을 고려할 때, 우선순위를 재조정할 필요가 있습니다.`;
+            message = `현재 '${topDef.name}' 분야의 성취가 낮습니다. 설정하신 목표를 다시 점검해 보세요.`;
         }
         this.setState({ aiAnalysis: message });
     }
