@@ -317,46 +317,112 @@ class LifeBalancer {
     updateChart() {
         const ctx = document.getElementById('balanceChart')?.getContext('2d');
         if (!ctx) return;
+
         const labels = this.state.categories.map(c => c.name);
         const todayRecord = this.state.records[this.state.selectedDate] || {};
+        
+        // 점수 계산: 중요도가 높을수록 100점에 도달하기 어렵게 설정
         const data = this.state.categories.map(c => {
             const investment = todayRecord[c.id] || 0;
-            const weightFactor = c.weight / 20;
+            // 가중치가 20%일 때를 기준(1:1)으로, 그보다 높으면 점수 획득이 어려움
+            const weightFactor = c.weight / 20; 
             return Math.min(100, Math.round(investment / (weightFactor || 1)));
         });
+
+        const hasDeficiency = data.some(score => score < 50);
+        const mainColor = hasDeficiency ? '#ff4d4d' : '#00f2ff'; // 결핍 시 빨간색
+        const areaColor = hasDeficiency ? 'rgba(255, 77, 77, 0.2)' : 'rgba(0, 242, 255, 0.2)';
+
         if (this.chart) this.chart.destroy();
+
         this.chart = new Chart(ctx, {
             type: 'radar',
             data: {
                 labels: labels,
-                datasets: [{
-                    label: '성과 달성도',
-                    data: data,
-                    backgroundColor: 'rgba(0, 242, 255, 0.2)',
-                    borderColor: '#00f2ff',
-                    borderWidth: 3,
-                    pointBackgroundColor: '#00f2ff',
-                    pointRadius: 4
-                }]
+                datasets: [
+                    {
+                        label: '완벽한 균형 (100%)',
+                        data: new Array(labels.length).fill(100),
+                        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                        borderColor: 'rgba(255, 255, 255, 0.1)',
+                        borderWidth: 1,
+                        borderDash: [5, 5],
+                        pointRadius: 0
+                    },
+                    {
+                        label: '나의 밸런스',
+                        data: data,
+                        backgroundColor: areaColor,
+                        borderColor: mainColor,
+                        borderWidth: 3,
+                        pointBackgroundColor: mainColor,
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: mainColor,
+                        pointRadius: 5,
+                        pointHitRadius: 10
+                    }
+                ]
             },
             options: {
+                responsive: true,
+                maintainAspectRatio: false,
                 scales: {
                     r: {
-                        beginAtZero: true,
+                        min: 0,
                         max: 100,
-                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                        angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
-                        pointLabels: { color: '#fff', font: { size: 14, weight: 'bold' } }
+                        beginAtZero: true,
+                        angleLines: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        pointLabels: {
+                            color: function(context) {
+                                // 해당 분야 점수가 낮으면 라벨도 빨간색으로 표시
+                                return data[context.index] < 50 ? '#ff4d4d' : '#fff';
+                            },
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        ticks: {
+                            display: false,
+                            stepSize: 20
+                        }
                     }
                 },
-                plugins: { legend: { display: false } }
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return ` 점수: ${context.raw}점`;
+                            }
+                        }
+                    }
+                }
             }
         });
+
+        // 하단 결핍 리스트 업데이트
         const defContainer = document.getElementById('deficiencyList');
         const deficiencies = this.state.categories
-            .filter((c, i) => data[i] < 50)
-            .map(c => `<div class="deficiency-alert">⚠️ '${c.name}' 분야의 투자가 가중치 대비 매우 부족합니다!</div>`);
-        defContainer.innerHTML = deficiencies.join('');
+            .map((c, i) => ({ name: c.name, score: data[i] }))
+            .filter(item => item.score < 50)
+            .map(item => `
+                <div class="deficiency-alert" style="background: rgba(255, 77, 77, 0.1); padding: 10px 15px; border-radius: 10px; margin-bottom: 8px; border-left: 4px solid #ff4d4d;">
+                    <strong>${item.name}</strong> 분야 성취도(${item.score}점)가 낮습니다! 가중치 대비 노력이 필요합니다.
+                </div>
+            `);
+        
+        defContainer.innerHTML = deficiencies.length > 0 
+            ? `<h4 style="color: #ff4d4d; margin-top: 20px; margin-bottom: 10px;">⚠️ 발견된 균형 결핍</h4>${deficiencies.join('')}`
+            : '<h4 style="color: #4dff88; margin-top: 20px;">✅ 아주 이상적인 균형을 유지하고 있습니다!</h4>';
     }
 
     runAiAnalysis() {
