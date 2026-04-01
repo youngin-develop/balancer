@@ -155,23 +155,24 @@ button:active {
 
 .setup-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 20px;
+    grid-template-columns: 1fr; /* 세로로 한 줄씩 배치 */
+    gap: 15px;
     margin-top: 20px;
 }
 
 .setup-item-card {
     background: #151515;
     border: 2px solid #333;
-    border-radius: 24px;
-    aspect-ratio: 1 / 1;
+    border-radius: 20px;
+    /* aspect-ratio 제거 */
     display: flex;
-    flex-direction: column;
+    flex-direction: row; /* 가로로 정렬 */
     align-items: center;
-    justify-content: center;
-    padding: 20px;
+    justify-content: space-between;
+    padding: 20px 30px;
     position: relative;
     transition: all 0.3s ease;
+    width: 100%;
 }
 
 .setup-item-card:focus-within {
@@ -185,16 +186,17 @@ button:active {
     color: white;
     font-size: 1.2rem;
     font-weight: 700;
-    text-align: center;
-    width: 100%;
-    margin-bottom: 10px;
+    text-align: left; /* 왼쪽 정렬 */
+    flex-grow: 1;
+    margin-bottom: 0;
+    margin-right: 20px;
 }
 
 .setup-item-weight-wrapper {
     display: flex;
     align-items: center;
-    gap: 5px;
-    font-size: 1.5rem;
+    gap: 8px;
+    font-size: 1.3rem;
     color: var(--accent-color);
     font-weight: 800;
 }
@@ -204,9 +206,9 @@ button:active {
     border: 1px solid #444;
     border-radius: 8px;
     color: var(--accent-color);
-    width: 70px;
+    width: 65px;
     text-align: center;
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     padding: 5px;
 }
 
@@ -214,14 +216,16 @@ button:active {
     background: #0a0a0a;
     border: 2px dashed #444;
     color: #444;
-    font-size: 3rem;
+    font-size: 2rem;
     cursor: pointer;
-    border-radius: 24px;
-    aspect-ratio: 1 / 1;
+    border-radius: 20px;
+    height: 70px; /* 높이 고정으로 가로가 긴 형태 유지 */
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.3s ease;
+    width: 100%;
+    margin-top: 10px;
 }
 
 .add-btn-card:hover {
